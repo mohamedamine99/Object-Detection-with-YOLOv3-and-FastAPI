@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-def preprocess_img_for_detection(net, img, size=(320, 320)):
+def preprocess_img_for_detection(img, size=(320, 320)):
     """
     This function preprocesses an input image for object detection using a specified YOLOv3 or YOLOv3-tiny
     DNN model. The image is resized to the specified size and converted into a blob. The blob is then set
@@ -30,21 +30,12 @@ def preprocess_img_for_detection(net, img, size=(320, 320)):
     # Convert the input image into a blob
     blob = cv2.dnn.blobFromImage(img, 1 / 255, size, [0, 0, 0], 1, crop=False)
 
-    # Set the blob as the input for the DNN model
-    net.setInput(blob)
-    layersNames = net.getLayerNames()
-
-    # Perform forward pass through the DNN model
-    output_layers_idx = net.getUnconnectedOutLayers()[0] - 1
-    outputNames = [(layersNames[idx - 1]) for idx in net.getUnconnectedOutLayers()]
-    # print(outputNames)
-    outputs = net.forward(outputNames)
-
-    # Return the output of the DNN model after forward pass
-    return outputs
+    return blob
 
 
-def detectObjects(img, outputs, score_threshold=0.8, NMS_threshold=0.5):
+
+
+def run_detection(img, labels, score_threshold=0.8, NMS_threshold=0.5):
     """
     This function takes an input image and the output of a YOLOv3 or YOLOv3-tiny DNN model after forward pass,
     detects objects in the image and draws bounding boxes around the objects. It also writes the class label and
@@ -68,6 +59,16 @@ def detectObjects(img, outputs, score_threshold=0.8, NMS_threshold=0.5):
             Input image with bounding boxes and class labels drawn around the detected objects.
 
     """
+
+    # Set the blob as the input for the DNN model
+    net.setInput(blob)
+    layersNames = net.getLayerNames()
+
+    # Perform forward pass through the DNN model
+    output_layers_idx = net.getUnconnectedOutLayers()[0] - 1
+    outputNames = [(layersNames[idx - 1]) for idx in net.getUnconnectedOutLayers()]
+    # print(outputNames)
+    outputs = net.forward(outputNames)
     # Get the shape of the input image
     hT, wT, cT = img.shape
 
@@ -94,19 +95,31 @@ def detectObjects(img, outputs, score_threshold=0.8, NMS_threshold=0.5):
     # Perform non-maximum suppression to eliminate overlapping bounding boxes
     indices = cv2.dnn.NMSBoxes(bbox, confs, score_threshold, NMS_threshold)
 
+    results_dict = {
+        'bbox_xywh': [],
+        'confs': [],
+        'class_IDs': []
+    }
+
     # Loop over each index in the indices list
     for i in indices:
         # Get the bounding box coordinates, class label and confidence score for the current index
         box = bbox[i]
+        class_id = classIds[i]
+        conf = int(confs[i] * 100)
+
         x, y, w, h = box[0], box[1], box[2], box[3]
         cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 255), 2)
-        cv2.putText(img, f'{labels[classIds[i]].upper()} {int(confs[i] * 100)}%',
+        cv2.putText(img, f'{labels[class_id].upper()} {conf}%',
                     (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
 
+        results_dict['bbox_xywh'].append(box)
+        results_dict['confs'].append(conf)
+        results_dict['labels'].append(labels[class_id])
     # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     # Return the input image with bounding boxes and class labels drawn around the detected objects
-    return img
+    return img, results_dict
 
 
 coco_names_file = './coco.names'
@@ -122,4 +135,10 @@ print(labels)
 # Creating YOLOv3 DNN model from configuration and pre-trained weights
 net = cv2.dnn.readNetFromDarknet(yolov3_cfg, yolov3_weights)
 
-img = cv2.imread('./test imgs/highway.PNG')
+img = cv2.imread('./images/highway.jpg')
+
+outputs = preprocess_img_for_detection(net = net , img = img, size = (320, 320))
+img , res = run_detection(img, outputs, score_threshold = 0.5, NMS_threshold = 0.4 )
+print(res)
+plt.imshow(img)
+plt.show()
