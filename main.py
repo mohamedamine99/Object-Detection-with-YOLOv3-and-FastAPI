@@ -1,16 +1,18 @@
+
 from fastapi import FastAPI, File, UploadFile
 import uvicorn
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from Yolov3_Detector import Detector
+
+from collections import Counter
 import numpy as np
 from io import BytesIO
 import cv2
 
-from collections import Counter
+from Yolov3_Detector import Detector
 
 
 def read_image(file) -> np.ndarray:
+    """Reads and decodes an image from an uploaded file."""
     # Create a BytesIO stream from the uploaded file
     image_stream = BytesIO(file)
 
@@ -21,37 +23,54 @@ def read_image(file) -> np.ndarray:
     # This will decode the image data into a NumPy array
     image = cv2.imdecode(np.frombuffer(image_stream.read(), np.uint8), cv2.IMREAD_COLOR)
 
+    # Return the decoded image as a NumPy array
     return image
 
 
 class DetectionResults(BaseModel):
-    filename : str = None
-    results_str : str = 'No detections'
-    results_list : list = None
+    """Model class to represent the results of object detection."""
+    filename: str = None
+    results_str: str = 'No detections'
+    results_list: list = None
 
 
 class DetectionParams(BaseModel):
+    """Model class to represent detection parameters."""
     score_threshold: float = 0.5
     NMS_threshold: float = 0.5
 
-app = FastAPI()
 
+# Create a FastAPI and Detector instances
+app = FastAPI()
 detector = Detector()
-detector.load_COCO_labels()
-detector.load_model()
 
 
 @app.post("/detection/")
-async def detect_on_img(file: UploadFile = File(...) ):
+async def detect_on_img(file: UploadFile = File(...)):
+    """Endpoint to perform object detection on an uploaded image."""
 
+    # Create an instance of DetectionResults to store the detection results
     results = DetectionResults()
+
+    # Read the uploaded image and decode it using OpenCV
     img = read_image(await file.read())
-    detector.set_detection_params()
+
+    # Perform object detection using the detector instance
     results.results_list = detector.run_detection_on_img(img)
+
+    # Store the filename of the uploaded image in the results
     results.filename = file.filename
-    if len(results.results_list) :
-        results.results_str = f'Found {len(results.results_list)} objects'
+
+    # If objects are detected in the image, update the results string
+    if len(results.results_list):
+        detected_labels_counter = Counter([detected_object['label'] for detected_object in results.results_list])
+        str2 = ", ".join(f"{value} x {key}" for key, value in detected_labels_counter.items())
+        results.results_str = f'Found {len(results.results_list)} objects : ' + str2
+
+    # Return the DetectionResults instance containing the detection results
     return results
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host='127.0.0.1', port=8000)
+
