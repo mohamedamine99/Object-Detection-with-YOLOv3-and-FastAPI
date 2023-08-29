@@ -55,7 +55,7 @@ Follow the steps below to get started with using the Object Detection API:
       Here's an example of how to make a simple API request using curl:
 
    ```sh
-   curl -X POST -F "file=@image.jpg" http://localhost:8000/predict
+   curl -X POST -F "file=@image.jpg" http://localhost:8000/detection
    ```
    - **Method 2:** Access Swagger UI:
 Open your web browser and navigate to the following URL to interact with your API using Swagger UI:
